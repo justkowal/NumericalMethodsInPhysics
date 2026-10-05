@@ -1,0 +1,48 @@
+# Nix / Direnv artifacts
+.direnv/
+result
+result-*
+
+# Build & compiled artifacts
+*.o
+*.obj
+*.so
+*.a
+*.out
+setup/hello
+setup/cblas_test
+setup/lapacke_test
+setup/fftw_test
+
+# TeX / LaTeX build intermediates
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Editor / OS metadata
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
+
+# Symlinked resources inside project folders
+Kowal_Jakub_Project*/Resources
