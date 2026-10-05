@@ -16,14 +16,15 @@
         inherit system;
       };
 
-      pythonEnv = pkgs.python3.withPackages (ps:
+      # Pin to Python 3.12 for stable pre-compiled NumPy/SciPy/Matplotlib C-extensions
+      pythonEnv = pkgs.python312.withPackages (ps:
         with ps; [
           numpy
           scipy
           matplotlib
         ]);
 
-      # Standalone packaging script available directly on PATH in any shell
+      # standalone packaging script available directly on PATH in any shell
       packProject = pkgs.writeShellScriptBin "pack-project" ''
         set -e
         TARGET_DIR="''${1%/}"
@@ -38,10 +39,12 @@
           exit 1
         fi
 
-        ZIP_NAME="''${TARGET_DIR}.zip"
+        mkdir -p zips
+        BASE_NAME=$(basename "$TARGET_DIR")
+        ZIP_NAME="zips/Kowal_Jakub_''${BASE_NAME}.zip"
         ROOT_IGNORE=".zipignore"
 
-        echo "Packaging $TARGET_DIR ->$ZIP_NAME..."
+        echo "Packaging $TARGET_DIR -> $ZIP_NAME..."
 
         if [ -f "$ROOT_IGNORE" ]; then
           ${pkgs.zip}/bin/zip -r "$ZIP_NAME" "$TARGET_DIR" -x@"$ROOT_IGNORE"
@@ -58,21 +61,20 @@
         name = "nmp-lab-shell";
 
         buildInputs = [
-          # C/C++ toolchain & build tools (LM3)
+          # build tools
           pkgs.gcc
           pkgs.gnumake
           pkgs.cmake
           pkgs.pkg-config
 
-          # Numerical libraries (LM5)
-          pkgs.lapack-reference
+          # numerical libraries
           pkgs.openblas
           pkgs.fftw
 
-          # Python stack for plotting & validation (LM7)
+          # python stack
           pythonEnv
 
-          # Workflow, transfer & archive utilities (LM3, LM10)
+          # utilities
           pkgs.git
           pkgs.nano
           pkgs.zip
@@ -81,22 +83,22 @@
           pkgs.openssh
           pkgs.sshfs
 
-          # Custom CLI utilities
           packProject
         ];
 
-        # Expose shared libraries for dynamically linked test binaries
-        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-          pkgs.lapack-reference
-          pkgs.openblas
-          pkgs.fftw
-        ];
+        # provide compiler include/lib paths without polluting global LD_LIBRARY_PATH
+        NIX_CFLAGS_COMPILE = "-I${pkgs.openblas}/include -I${pkgs.fftw.dev}/include";
+        NIX_LDFLAGS = "-L${pkgs.openblas}/lib -L${pkgs.fftw}/lib";
 
         shellHook = ''
+          # prevent inherited library path overrides from interfering with Python
+          unset LD_LIBRARY_PATH
+          unset CPATH
+
           # create course directory tree
-          mkdir -p setup Resources
-          mkdir -p Kowal_Jakub_Project{01..15}/{src,data,plots,report}
-          touch Kowal_Jakub_Project{01..15}/README.md
+          mkdir -p setup Resources zips
+          mkdir -p Project{01..15}/{src,data,plots,report}
+          touch Project{01..15}/README.md
 
           # unpack any missing zips from downloads to resources folder at root
           DOWNLOADS_DIR="$HOME/Downloads"
@@ -124,7 +126,7 @@
 
               if [ -n "$num" ]; then
                 num_formatted=$(printf "%02d" "$((10#$num))")
-                target_dir="Kowal_Jakub_Project$num_formatted"
+                target_dir="Project$num_formatted"
 
                 if [ -d "$target_dir" ]; then
                   if [ -L "$target_dir/Resources" ]; then
