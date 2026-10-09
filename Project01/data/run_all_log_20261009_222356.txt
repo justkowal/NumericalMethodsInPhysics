@@ -1,0 +1,28 @@
+[ 25%] Built target project01_core
+[ 41%] Built target activity1
+[ 58%] Built target activity3
+[ 75%] Built target activity4
+[ 91%] Built target activity2
+[100%] Building all activities, running 1, 2, 4 in terminal, and running plotter for 3...
+
+ACTIVITY 1:
+dot([1,2,3],[4,5,6]) = 32.000000
+norm([3,4]) = 5.000000
+norm([0,0]) = 0.000000
+row_offset(2,1,5) = 11
+col_offset(2,1,5) = 7
+
+ACTIVITY 2:
+y = [5.000000, 11.000000]
+y after swap = [27.000000, 59.000000]
+
+ACTIVITY 3:
+saved /home/justkowal/Documents/AGH/3rdSem/NMP/Project01/data/norms_gamma2.csv
+saved /home/justkowal/Documents/AGH/3rdSem/NMP/Project01/data/norms_gamma3.csv
+Saved separate and comparison gamma plots to /home/justkowal/Documents/AGH/3rdSem/NMP/Project01/plots
+
+ACTIVITY 4:
+frobenius_difference=8.1455727408523232e-16 tolerance=1.2183733938075832e-11
+manual median_ms=81.217730 spread_ms=0.282112
+blas   median_ms=1.377534 spread_ms=3.086934
+[100%] Built target run_all

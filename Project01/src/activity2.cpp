@@ -3,17 +3,11 @@
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
-#include <stdexcept>
 #include <utility>
-
-namespace
-{
-
-} // namespace
 
 int main()
 {
-    Matrix a(2, 2, MatrixStorageOrder::row_major);
+    Matrix a(2, 2);
     a(0, 0) = 1.0;
     a(0, 1) = 2.0;
     a(1, 0) = 3.0;

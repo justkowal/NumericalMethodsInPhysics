@@ -20,6 +20,7 @@ namespace
         std::size_t n = 256;
         std::size_t repeats = 5;
         std::size_t warmup = 1;
+        double gamma = 2.0;
     };
 
     std::size_t parse_size(const std::string &text)
@@ -49,7 +50,7 @@ namespace
             const std::string key = argv[i];
             if (key == "--help")
             {
-                std::cout << "activity4 --n 256 --repeats 5 --warmup 1\n";
+                std::cout << "activity4 --n 256 --repeats 5 --warmup 1 --gamma 2.0\n";
                 std::exit(0);
             }
 
@@ -71,6 +72,10 @@ namespace
             {
                 options.warmup = parse_size(value);
             }
+            else if (key == "--gamma")
+            {
+                options.gamma = std::stod(value);
+            }
             else
             {
                 throw std::invalid_argument("Unknown option: " + key);
@@ -80,29 +85,20 @@ namespace
         return options;
     }
 
-    Matrix make_dense_matrix(std::size_t n)
+    Matrix make_dense_matrix(std::size_t n, double gamma)
     {
-        Matrix a(n, n, MatrixStorageOrder::row_major);
-        for (std::size_t i = 0; i < n; ++i)
-        {
-            for (std::size_t j = 0; j < n; ++j)
-            {
-                a(i, j) = 1.0 / (1.0 + static_cast<double>(i + j));
-            }
-        }
-        return a;
+        return Matrix(n, n, [gamma](std::size_t i, std::size_t j) {
+            const double distance = static_cast<double>(i) - static_cast<double>(j);
+            return 1.0 / (distance * distance * distance * distance + gamma);
+        });
     }
 
     double frobenius_norm(const Matrix &m)
     {
         double sum = 0.0;
-        for (std::size_t i = 0; i < m.rows(); ++i)
+        for (double value : m.data())
         {
-            for (std::size_t j = 0; j < m.cols(); ++j)
-            {
-                const double value = m(i, j);
-                sum += value * value;
-            }
+            sum += value * value;
         }
         return std::sqrt(sum);
     }
@@ -114,14 +110,13 @@ namespace
             throw std::invalid_argument("frobenius_difference expects same-sized matrices");
         }
 
+        const auto &a = lhs.data();
+        const auto &b = rhs.data();
         double sum = 0.0;
-        for (std::size_t i = 0; i < lhs.rows(); ++i)
+        for (std::size_t i = 0; i < a.size(); ++i)
         {
-            for (std::size_t j = 0; j < lhs.cols(); ++j)
-            {
-                const double diff = lhs(i, j) - rhs(i, j);
-                sum += diff * diff;
-            }
+            const double diff = a[i] - b[i];
+            sum += diff * diff;
         }
         return std::sqrt(sum);
     }
@@ -184,7 +179,7 @@ namespace
 
     void verify_small_case()
     {
-        Matrix a(2, 2, MatrixStorageOrder::row_major);
+        Matrix a(2, 2);
         a(0, 0) = 1.0;
         a(0, 1) = 2.0;
         a(1, 0) = 3.0;
@@ -216,7 +211,7 @@ int main(int argc, char **argv)
         const Options options = parse_options(argc, argv);
         verify_small_case();
 
-        const Matrix input = make_dense_matrix(options.n);
+        const Matrix input = make_dense_matrix(options.n, options.gamma);
         const Matrix manual_output = input.multiply_manual(input);
 
         const Matrix blas_output = input.multiply_blas(input);

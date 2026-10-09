@@ -1,38 +1,19 @@
 #include "Matrix.hpp"
-
 #include <cblas.h>
 
-Matrix::Matrix(size_t n, size_t m, MatrixStorageOrder order, size_t lda, double initialValue)
-    : n(n), m(m), lda(lda), _order(order), _data()
+Matrix::Matrix(size_t n, size_t m, size_t lda, double initialValue)
+    : n(n), m(m), lda(lda == 0 ? m : lda), _data()
 {
-    if (n == 0 || m == 0)
+    if (this->lda < m)
     {
-        throw std::invalid_argument("Matrix dimensions must be positive");
+        throw std::invalid_argument("Row-major LDA must be at least the number of columns");
     }
+    _data.assign(n * this->lda, initialValue);
+}
 
-    if (lda == 0)
-    {
-        lda = order == MatrixStorageOrder::row_major ? m : n;
-    }
-
-    if (order == MatrixStorageOrder::row_major)
-    {
-        if (lda < m)
-        {
-            throw std::invalid_argument("Row-major LDA must be at least the number of columns");
-        }
-        _data.assign(n * lda, initialValue);
-    }
-    else
-    {
-        if (lda < n)
-        {
-            throw std::invalid_argument("Column-major LDA must be at least the number of rows");
-        }
-        _data.assign(m * lda, initialValue);
-    }
-
-    this->lda = lda;
+Matrix::Matrix(size_t n, size_t m, double initialValue)
+    : Matrix(n, m, m, initialValue)
+{
 }
 
 size_t Matrix::rows() const
@@ -50,21 +31,6 @@ size_t Matrix::leading_dimension() const
     return lda;
 }
 
-MatrixStorageOrder Matrix::order() const
-{
-    return _order;
-}
-
-bool Matrix::is_row_major() const
-{
-    return _order == MatrixStorageOrder::row_major;
-}
-
-bool Matrix::is_column_major() const
-{
-    return _order == MatrixStorageOrder::column_major;
-}
-
 size_t Matrix::row_offset(size_t i, size_t j, size_t lda)
 {
     return i * lda + j;
@@ -72,17 +38,12 @@ size_t Matrix::row_offset(size_t i, size_t j, size_t lda)
 
 size_t Matrix::column_offset(size_t i, size_t j, size_t lda)
 {
-    return i + j * lda;
+    return j * lda + i;
 }
 
 size_t Matrix::offset(size_t i, size_t j) const
 {
-    if (i >= n || j >= m)
-    {
-        throw std::out_of_range("Matrix indices out of range");
-    }
-
-    return is_row_major() ? row_offset(i, j, lda) : column_offset(i, j, lda);
+    return row_offset(i, j, lda);
 }
 
 std::vector<double> &Matrix::data()
@@ -97,67 +58,77 @@ const std::vector<double> &Matrix::data() const
 
 double &Matrix::operator()(size_t i, size_t j)
 {
+    if (i >= n || j >= m)
+    {
+        throw std::out_of_range("Matrix index out of bounds");
+    }
     return _data[offset(i, j)];
 }
 
 const double &Matrix::operator()(size_t i, size_t j) const
 {
+    if (i >= n || j >= m)
+    {
+        throw std::out_of_range("Matrix index out of bounds");
+    }
     return _data[offset(i, j)];
-}
-
-Vector Matrix::matvec(const Vector &x) const
-{
-    Vector result(n, x.order());
-    matvec(x, result);
-    return result;
 }
 
 void Matrix::matvec(const Vector &x, Vector &y) const
 {
-    if (x.size() != m || y.size() != n)
-    {
-        throw std::invalid_argument("Matrix-vector dimensions do not match");
-    }
-
     if (&x == &y)
     {
-        throw std::invalid_argument("Matrix-vector input and output must not alias");
+        throw std::invalid_argument("Input and output vectors must not alias");
+    }
+    if (m != x.size())
+    {
+        throw std::invalid_argument("Incompatible matrix and vector dimensions");
+    }
+    if (y.size() != n)
+    {
+        y = Vector(n, 0.0);
     }
 
     for (size_t i = 0; i < n; ++i)
     {
         double sum = 0.0;
+        const size_t row_start = i * lda;
         for (size_t j = 0; j < m; ++j)
         {
-            sum += (*this)(i, j) * x[j];
+            sum += _data[row_start + j] * x[j];
         }
         y[i] = sum;
     }
+}
+
+Vector Matrix::matvec(const Vector &x) const
+{
+    Vector y(n, 0.0);
+    matvec(x, y);
+    return y;
+}
+
+Vector Matrix::operator*(const Vector &x) const
+{
+    return matvec(x);
 }
 
 Matrix Matrix::multiply_manual(const Matrix &other) const
 {
     if (m != other.n)
     {
-        throw std::invalid_argument("Matrix dimensions do not match for multiplication");
+        throw std::invalid_argument("Incompatible dimensions for multiplication");
     }
 
-    if (_order != other._order)
-    {
-        throw std::invalid_argument("Matrix multiplication requires matching storage order");
-    }
-
-    const size_t resultLda = is_row_major() ? other.m : n;
-
-    Matrix result(n, other.m, _order, resultLda, 0.0);
+    Matrix result(n, other.m, 0.0);
     for (size_t i = 0; i < n; ++i)
     {
         for (size_t k = 0; k < m; ++k)
         {
-            const double a = (*this)(i, k);
+            const double a_ik = _data[offset(i, k)];
             for (size_t j = 0; j < other.m; ++j)
             {
-                result(i, j) += a * other(k, j);
+                result(i, j) += a_ik * other(k, j);
             }
         }
     }
@@ -168,22 +139,25 @@ Matrix Matrix::multiply_blas(const Matrix &other) const
 {
     if (m != other.n)
     {
-        throw std::invalid_argument("Matrix dimensions do not match for multiplication");
+        throw std::invalid_argument("Incompatible dimensions for multiplication");
     }
 
-    if (_order != other._order)
-    {
-        throw std::invalid_argument("BLAS multiplication requires matching matrix storage order");
-    }
-
-    const size_t resultLda = is_row_major() ? other.m : n;
-    Matrix result(n, other.m, _order, resultLda, 0.0);
-    const CBLAS_ORDER blasOrder = is_row_major() ? CblasRowMajor : CblasColMajor;
-
-    cblas_dgemm(blasOrder, CblasNoTrans, CblasNoTrans,
-                static_cast<int>(n), static_cast<int>(other.m), static_cast<int>(m),
-                1.0, _data.data(), static_cast<int>(lda),
-                other._data.data(), static_cast<int>(other.lda),
-                0.0, result._data.data(), static_cast<int>(result.lda));
+    Matrix result(n, other.m, 0.0);
+    cblas_dgemm(
+        CblasRowMajor,
+        CblasNoTrans,
+        CblasNoTrans,
+        static_cast<int>(n),
+        static_cast<int>(other.m),
+        static_cast<int>(m),
+        1.0,
+        _data.data(),
+        static_cast<int>(lda),
+        other._data.data(),
+        static_cast<int>(other.lda),
+        0.0,
+        result._data.data(),
+        static_cast<int>(result.lda)
+    );
     return result;
 }

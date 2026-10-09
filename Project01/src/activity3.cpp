@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
@@ -23,7 +24,7 @@ namespace
         std::size_t steps = 30;
         std::string gamma = "both";
         std::filesystem::path output = "data";
-        bool overwrite = false;
+        bool overwrite = true;
     };
 
     std::size_t parse_size(const std::string &text)
@@ -110,17 +111,10 @@ namespace
             throw std::invalid_argument("gamma_matrix requires n > 0");
         }
 
-        Matrix a(n, n, MatrixStorageOrder::row_major);
-        for (std::size_t i = 0; i < n; ++i)
-        {
-            for (std::size_t j = 0; j < n; ++j)
-            {
-                const double distance = static_cast<double>(i) - static_cast<double>(j);
-                const double fourth_power = distance * distance * distance * distance;
-                a(i, j) = 1.0 / (fourth_power + gamma);
-            }
-        }
-        return a;
+        return Matrix(n, n, [gamma](std::size_t i, std::size_t j) {
+            const double distance = static_cast<double>(i) - static_cast<double>(j);
+            return 1.0 / (distance * distance * distance * distance + gamma);
+        });
     }
 
     std::vector<double> norm_history(std::size_t n, std::size_t steps, double gamma)
