@@ -35,34 +35,98 @@
       # standalone packaging script available directly on PATH in any shell
       packProject = pkgs.writeShellScriptBin "pack-project" ''
         set -e
-        TARGET_DIR="''${1%/}"
+        REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-        if [ -z "$TARGET_DIR" ]; then
-          echo "Usage: pack-project <ProjectDirectory>"
-          exit 1
-        fi
+        INPUT_ARG="''${1%/}"
 
-        if [ ! -d "$TARGET_DIR" ]; then
-          echo "Error: Directory '$TARGET_DIR' does not exist."
-          exit 1
-        fi
-
-        mkdir -p zips
-        BASE_NAME=$(basename "$TARGET_DIR")
-        ZIP_NAME="zips/Kowal_Jakub_''${BASE_NAME}.zip"
-        ROOT_IGNORE=".zipignore"
-
-        echo "Packaging $TARGET_DIR -> $ZIP_NAME..."
-
-        if [ -f "$ROOT_IGNORE" ]; then
-          ${pkgs.zip}/bin/zip -r "$ZIP_NAME" "$TARGET_DIR" -x@"$ROOT_IGNORE"
+        # Resolve target directory
+        TARGET_DIR=""
+        if [ -n "$INPUT_ARG" ]; then
+          if [ "$INPUT_ARG" = "repo" ] || { [ "$INPUT_ARG" = "." ] && [ "$PWD" = "$REPO_ROOT" ]; }; then
+            TARGET_DIR="$REPO_ROOT"
+          elif [ -d "$INPUT_ARG" ]; then
+            TARGET_DIR="$(cd "$INPUT_ARG" && pwd)"
+          elif [ -d "$REPO_ROOT/$INPUT_ARG" ]; then
+            TARGET_DIR="$REPO_ROOT/$INPUT_ARG"
+          else
+            # Try interpreting as numeric index or ProjectXX
+            NUM=$(echo "$INPUT_ARG" | grep -o -E '[0-9]+' | head -n1)
+            if [ -n "$NUM" ]; then
+              PROJ_CANDIDATE="$REPO_ROOT/Project$(printf "%02d" "$((10#$NUM))")"
+              if [ -d "$PROJ_CANDIDATE" ]; then
+                TARGET_DIR="$PROJ_CANDIDATE"
+              fi
+            fi
+          fi
         else
-          ${pkgs.zip}/bin/zip -r "$ZIP_NAME" "$TARGET_DIR" -x "*/Resources/*" "*.tex" "*.aux" "*.log"
+          # If no argument given, check if current directory is a project directory or repo root
+          CURR_NAME=$(basename "$PWD")
+          if echo "$CURR_NAME" | grep -q -E '^Project[0-9]+'; then
+            TARGET_DIR="$PWD"
+          elif [ "$PWD" = "$REPO_ROOT" ]; then
+            TARGET_DIR="$REPO_ROOT"
+          fi
         fi
+
+        if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+          echo "Usage: pack-project [ProjectDirectory|Index|repo]"
+          echo "Examples: pack-project Project01, pack-project 01, or pack-project repo"
+          exit 1
+        fi
+
+        if [ "$TARGET_DIR" = "$REPO_ROOT" ]; then
+          PACKAGE_NAME="Kowal_Jakub_NMP"
+          BASE_NAME="Repository"
+        else
+          BASE_NAME=$(basename "$TARGET_DIR")
+          PACKAGE_NAME="Kowal_Jakub_''${BASE_NAME}"
+        fi
+
+        ZIPS_DIR="$REPO_ROOT/zips"
+        ZIP_NAME="$ZIPS_DIR/''${PACKAGE_NAME}.zip"
+        ROOT_IGNORE="$REPO_ROOT/.zipignore"
+
+        mkdir -p "$ZIPS_DIR"
+        rm -f "$ZIP_NAME"
+
+        echo "Packaging $BASE_NAME as $PACKAGE_NAME -> $ZIP_NAME..."
+
+        # Stage with the submission package name so internal directory matches zip name
+        STAGE_DIR=$(mktemp -d)
+        DEST_DIR="$STAGE_DIR/$PACKAGE_NAME"
+        mkdir -p "$DEST_DIR"
+        cp -a "$TARGET_DIR/." "$DEST_DIR/"
+
+        # Rename bundled.nix to flake.nix (or copy from repo root) and hook up direnv
+        if [ -f "$DEST_DIR/bundled.nix" ]; then
+          mv -f "$DEST_DIR/bundled.nix" "$DEST_DIR/flake.nix"
+        elif [ -f "$REPO_ROOT/bundled.nix" ]; then
+          cp -f "$REPO_ROOT/bundled.nix" "$DEST_DIR/flake.nix"
+        fi
+
+        if [ -f "$REPO_ROOT/flake.lock" ] && [ ! -f "$DEST_DIR/flake.lock" ]; then
+          cp -f "$REPO_ROOT/flake.lock" "$DEST_DIR/flake.lock"
+        fi
+
+        echo "use flake" > "$DEST_DIR/.envrc"
+
+        # Clean up symlinks, build artifacts, git and caches before archiving
+        rm -rf "$DEST_DIR/Resources" "$DEST_DIR/.git" "$DEST_DIR"/build "$DEST_DIR"/*build* "$DEST_DIR"/bin "$DEST_DIR"/.cache "$DEST_DIR"/.vscode "$DEST_DIR"/.direnv "$DEST_DIR"/zips
+        rm -f "$DEST_DIR/compile_flags.txt" "$DEST_DIR/compile_commands.json"
+
+        (
+          cd "$STAGE_DIR"
+          if [ -f "$ROOT_IGNORE" ]; then
+            ${pkgs.zip}/bin/zip -r "$ZIP_NAME" "$PACKAGE_NAME" -x@"$ROOT_IGNORE"
+          else
+            ${pkgs.zip}/bin/zip -r "$ZIP_NAME" "$PACKAGE_NAME"
+          fi
+        )
+        rm -rf "$STAGE_DIR"
 
         echo "Testing archive integrity..."
         ${pkgs.unzip}/bin/unzip -t "$ZIP_NAME"
-        echo "Done. Inspect with: unzip -l $ZIP_NAME"
+        echo "Done. Package created at $ZIP_NAME"
       '';
     in {
       devShells.default = pkgs.mkShell {
@@ -96,21 +160,27 @@
         ];
 
         # provide compiler include/lib paths without polluting global LD_LIBRARY_PATH
-        NIX_CFLAGS_COMPILE = "-I${pkgs.openblas.dev}/include -I${pkgs.fftw.dev}/include";
-        NIX_LDFLAGS = "-L${pkgs.openblas}/lib -L${pkgs.fftw}/lib";
+        NIX_CFLAGS_COMPILE = "-I${pkgs.openblas.dev}/include -I${pkgs.openblas.dev}/include/openblas -I${pkgs.fftw.dev}/include";
+        NIX_LDFLAGS = "-L${pkgs.glibc}/lib -L${pkgs.openblas}/lib -L${pkgs.fftw}/lib";
 
         # Preprocessor and linker search paths for external tools, editors, and language servers
         CPLUS_INCLUDE_PATH = "${gccInclude}:${gccArchInclude}:${glibcInclude}:${openblasInclude}:${openblasInclude}/openblas:${fftwInclude}";
         C_INCLUDE_PATH = "${glibcInclude}:${openblasInclude}:${openblasInclude}/openblas:${fftwInclude}";
-        LIBRARY_PATH = "${pkgs.openblas}/lib:${pkgs.fftw}/lib";
+        LIBRARY_PATH = "${pkgs.glibc}/lib:${pkgs.openblas}/lib:${pkgs.fftw}/lib";
+        CMAKE_LIBRARY_PATH = "${pkgs.glibc}/lib:${pkgs.openblas}/lib:${pkgs.fftw}/lib";
+        CMAKE_INCLUDE_PATH = "${openblasInclude}:${openblasInclude}/openblas:${fftwInclude}";
 
         shellHook = ''
-          # prevent inherited library path overrides from interfering with Python
+          # prevent inherited library path overrides from interfering with Python/build
           unset LD_LIBRARY_PATH
+          unset NIX_CFLAGS_LINK
 
-          # Configure VS Code C/C++ IntelliSense & settings for Nix
-          mkdir -p .vscode
-          cat > .vscode/c_cpp_properties.json <<EOF
+          # Locate repo root accurately even if invoked from subdirectories
+          REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+          # Configure VS Code C/C++ IntelliSense & settings for Nix at repo root
+          mkdir -p "$REPO_ROOT/.vscode"
+          cat > "$REPO_ROOT/.vscode/c_cpp_properties.json" <<EOF
 {
   "configurations": [
     {
@@ -139,7 +209,7 @@
 }
 EOF
 
-          cat > .vscode/settings.json <<EOF
+          cat > "$REPO_ROOT/.vscode/settings.json" <<EOF
 {
   "C_Cpp.default.compilerPath": "${pkgs.gcc}/bin/g++",
   "C_Cpp.default.cppStandard": "c++17",
@@ -162,7 +232,7 @@ EOF
 }
 EOF
 
-          cat > .vscode/compile_flags.txt <<EOF
+          cat > "$REPO_ROOT/.vscode/compile_flags.txt" <<EOF
 -xc++
 -std=c++17
 -Iinclude
@@ -172,29 +242,14 @@ EOF
 -DSTUDENT_WITH_BLAS
 EOF
 
-          # create course directory tree (0-indexed projects)
-          mkdir -p setup Resources zips
-          mkdir -p Project{00..15}/{src,data,plots,report}
-          touch Project{00..15}/README.md
+          # Ensure base workspace directories exist
+          mkdir -p "$REPO_ROOT/setup" "$REPO_ROOT/Resources" "$REPO_ROOT/zips"
 
-          # Propagate VS Code configurations and direnv activation to each Project directory
-          for proj_dir in Project{00..15}; do
-            if [ -d "$proj_dir" ]; then
-              mkdir -p "$proj_dir/.vscode"
-              cp -f .vscode/c_cpp_properties.json "$proj_dir/.vscode/c_cpp_properties.json"
-              cp -f .vscode/settings.json "$proj_dir/.vscode/settings.json"
-              cp -f .vscode/compile_flags.txt "$proj_dir/compile_flags.txt"
-              if [ ! -f "$proj_dir/.envrc" ]; then
-                echo "source_env ../.envrc" > "$proj_dir/.envrc"
-              fi
-            fi
-          done
-
-          # Helper function to unpack a lab zip without nested duplicate folders
+          # Helper function to unpack a lab zip cleanly into Resources/<target_name>
           unpack_lab_zip() {
             local zip_file="$1"
             local target_name="$2"
-            local dest_dir="Resources/$target_name"
+            local dest_dir="$REPO_ROOT/Resources/$target_name"
 
             if [ -d "$dest_dir" ]; then
               return 0
@@ -216,14 +271,13 @@ EOF
           # 1. Automatically fetch the next lab(s) from AGH server
           AGH_BASE_URL="https://home.agh.edu.pl/~khanpour"
           next_lab_idx=1
-          while [ -d "Resources/nmpLab$(printf "%02d" "$next_lab_idx")" ]; do
+          while [ -d "$REPO_ROOT/Resources/nmpLab$(printf "%02d" "$next_lab_idx")" ]; do
             next_lab_idx=$((next_lab_idx + 1))
           done
 
           while true; do
             lab_str=$(printf "%02d" "$next_lab_idx")
             archive_url="$AGH_BASE_URL/nmpLab''${lab_str}.zip"
-            dest_dir="Resources/nmpLab''${lab_str}"
 
             temp_zip=$(mktemp --suffix=.zip)
             if ${pkgs.curl}/bin/curl -fsSL --connect-timeout 4 --max-time 30 -o "$temp_zip" "$archive_url" 2>/dev/null; then
@@ -237,14 +291,14 @@ EOF
             fi
           done
 
-          # 2. Local fallback: unpack any missing zips from ~/Downloads
+          # 2. Local fallback: unpack any missing zips from ~/Downloads or repo zips/
           DOWNLOADS_DIR="$HOME/Downloads"
           if [ -d "$DOWNLOADS_DIR" ]; then
             for zip_path in "$DOWNLOADS_DIR"/*Lab*.zip "$DOWNLOADS_DIR"/*lab*.zip; do
               if [ -f "$zip_path" ]; then
                 zip_filename=$(basename "$zip_path")
                 target_name="''${zip_filename%.zip}"
-                dest_dir="Resources/$target_name"
+                dest_dir="$REPO_ROOT/Resources/$target_name"
 
                 if [ ! -d "$dest_dir" ]; then
                   echo "Found new lab archive in Downloads: $zip_filename. Extracting to $dest_dir..."
@@ -254,26 +308,24 @@ EOF
             done
           fi
 
-          # 3. Symlink project resources from main resources dir to project specific dirs (offset by 1)
-          # lab 1 -> Project00, lab 2 -> Project01, etc.
-          # Clean up any stale or mismatched Resources symlinks
-          for proj_dir in Project[0-9]*; do
-            if [ -d "$proj_dir" ]; then
-              p_num=$(echo "$proj_dir" | grep -o -E '[0-9]+' | head -n1)
-              if [ -n "$p_num" ]; then
-                expected_lab=$((10#$p_num + 1))
-                expected_target="../Resources/nmpLab$(printf "%02d" "$expected_lab")"
-                if [ -L "$proj_dir/Resources" ]; then
-                  current_target=$(readlink "$proj_dir/Resources")
-                  if [ "$current_target" != "$expected_target" ] || [ ! -d "$proj_dir/$current_target" ]; then
-                    rm "$proj_dir/Resources"
-                  fi
+          if [ -d "$REPO_ROOT/zips" ]; then
+            for zip_path in "$REPO_ROOT/zips"/*Lab*.zip "$REPO_ROOT/zips"/*lab*.zip; do
+              if [ -f "$zip_path" ]; then
+                zip_filename=$(basename "$zip_path")
+                target_name="''${zip_filename%.zip}"
+                dest_dir="$REPO_ROOT/Resources/$target_name"
+
+                if [ ! -d "$dest_dir" ]; then
+                  echo "Found new lab archive in zips: $zip_filename. Extracting to $dest_dir..."
+                  unpack_lab_zip "$zip_path" "$target_name"
                 fi
               fi
-            fi
-          done
+            done
+          fi
 
-          for res_path in Resources/*Lab[0-9]* Resources/*lab[0-9]*; do
+          # 3. Only create project folders for projects that have accessible zip packages (in Resources)
+          # offset by 1: nmpLab01 -> Project00, nmpLab02 -> Project01, etc.
+          for res_path in "$REPO_ROOT"/Resources/*Lab[0-9]* "$REPO_ROOT"/Resources/*lab[0-9]*; do
             if [ -d "$res_path" ]; then
               res_name=$(basename "$res_path")
               lab_num=$(echo "$res_name" | grep -o -E '[0-9]+' | head -n1)
@@ -281,13 +333,35 @@ EOF
               if [ -n "$lab_num" ]; then
                 proj_num=$((10#$lab_num - 1))
                 proj_formatted=$(printf "%02d" "$proj_num")
-                target_dir="Project$proj_formatted"
+                target_dir="$REPO_ROOT/Project$proj_formatted"
 
-                if [ -d "$target_dir" ]; then
-                  if [ -L "$target_dir/Resources" ]; then
+                # Create project scaffold if it doesn't already exist
+                mkdir -p "$target_dir"/{src,data,plots,report}
+                if [ ! -f "$target_dir/README.md" ]; then
+                  touch "$target_dir/README.md"
+                fi
+                if [ ! -f "$target_dir/CMakeLists.txt" ] && [ -f "$REPO_ROOT/setup/CMakeLists.template.txt" ]; then
+                  cp "$REPO_ROOT/setup/CMakeLists.template.txt" "$target_dir/CMakeLists.txt"
+                fi
+
+                # Propagate configurations without touching user code
+                mkdir -p "$target_dir/.vscode"
+                cp -f "$REPO_ROOT/.vscode/c_cpp_properties.json" "$target_dir/.vscode/c_cpp_properties.json"
+                cp -f "$REPO_ROOT/.vscode/settings.json" "$target_dir/.vscode/settings.json"
+                if [ ! -f "$target_dir/compile_flags.txt" ]; then
+                  cp -f "$REPO_ROOT/.vscode/compile_flags.txt" "$target_dir/compile_flags.txt"
+                fi
+
+                # Symlink Resources to project directory (never touch real directories/files)
+                expected_target="../Resources/$res_name"
+                if [ -L "$target_dir/Resources" ]; then
+                  current_target=$(readlink "$target_dir/Resources")
+                  if [ "$current_target" != "$expected_target" ]; then
                     rm "$target_dir/Resources"
+                    ln -s "$expected_target" "$target_dir/Resources"
                   fi
-                  ln -sfn "../$res_path" "$target_dir/Resources"
+                elif [ ! -e "$target_dir/Resources" ]; then
+                  ln -s "$expected_target" "$target_dir/Resources"
                 fi
               fi
             fi

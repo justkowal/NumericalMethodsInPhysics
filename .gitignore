@@ -1,5 +1,6 @@
 # Nix / Direnv artifacts
 .direnv/
+**/.direnv/
 result
 result-*
 
@@ -7,19 +8,40 @@ result-*
 *.o
 *.obj
 *.so
+*.dylib
 *.a
 *.out
+*.exe
 setup/hello
 setup/cblas_test
 setup/lapacke_test
 setup/fftw_test
 bin/
-Project*/bin/
-Project*/.envrc
+**/bin/
+build/
+**/build/
+*build*/
+**/*build*/
+
+# Archives & packaged submissions
+zips/
+*.zip
+*.tar.gz
+*.tgz
+
+# IDE, LSP & Editor files
+.cache/
+**/.cache/
+.clangd/
+**/.clangd/
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
 compile_flags.txt
-Project*/compile_flags.txt
-.starter_applied
-**/.starter_applied
+**/compile_flags.txt
+compile_commands.json
+**/compile_commands.json
 
 # TeX / LaTeX build intermediates
 *.aux
@@ -39,17 +61,31 @@ Project*/compile_flags.txt
 
 # Python cache & virtual environments
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 .venv/
+**/.venv/
 venv/
-
-# Editor / OS metadata
-.vscode/
-.idea/
-.DS_Store
-*.swp
-*~
+**/venv/
+.pytest_cache/
 
 # Symlinked resources inside project folders
+Project*/Resources
+**/Project*/Resources
 Kowal_Jakub_Project*/Resources
+**/Kowal_Jakub_Project*/Resources
+
+# OS metadata & swap files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Project-level local envrc (root .envrc is tracked)
+Project*/.envrc
+**/Project*/.envrc
+
+# Lab starter flags
+.starter_applied
+**/.starter_applied
