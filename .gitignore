@@ -13,6 +13,13 @@ setup/hello
 setup/cblas_test
 setup/lapacke_test
 setup/fftw_test
+bin/
+Project*/bin/
+Project*/.envrc
+compile_flags.txt
+Project*/compile_flags.txt
+.starter_applied
+**/.starter_applied
 
 # TeX / LaTeX build intermediates
 *.aux
