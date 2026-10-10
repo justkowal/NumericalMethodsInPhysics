@@ -58,6 +58,12 @@ compile_commands.json
 *.synctex.gz
 *.toc
 *.vrb
+*.pydata
+*.minted
+_minted*/
+**/_minted*/
+.codesnippet*
+**/.codesnippet*
 
 # Python cache & virtual environments
 __pycache__/

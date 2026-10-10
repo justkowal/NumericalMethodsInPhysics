@@ -22,6 +22,7 @@
           numpy
           scipy
           matplotlib
+          pygments
         ]);
 
       # Include and library discovery for compilers, LSPs, and VS Code

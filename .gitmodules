@@ -1,0 +1,3 @@
+[submodule "codesnippet"]
+	path = codesnippet
+	url = ../codesnippet.git
