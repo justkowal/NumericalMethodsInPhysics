@@ -4,12 +4,17 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    codesnippet-src = {
+      url = "github:justkowal/codesnippet";
+      flake = false;
+    };
   };
 
   outputs = {
     self,
     nixpkgs,
     flake-utils,
+    codesnippet-src,
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
@@ -32,6 +37,100 @@
       glibcInclude = "${pkgs.glibc.dev}/include";
       openblasInclude = "${pkgs.openblas.dev}/include";
       fftwInclude = "${pkgs.fftw.dev}/include";
+
+      # Custom LaTeX code extraction package
+      codesnippetPkg = pkgs.stdenvNoCC.mkDerivation {
+        pname = "codesnippet";
+        version = "1.0";
+        src = codesnippet-src;
+        dontUnpack = true;
+        tlType = "run";
+        installPhase = ''
+          mkdir -p $out/tex/latex/codesnippet
+          cp $src/codesnippet.sty $src/extract.py $out/tex/latex/codesnippet/
+          mkdir -p $out/bin
+          cp $src/extract.py $out/bin/codesnippet-extract
+          chmod +x $out/bin/codesnippet-extract $out/tex/latex/codesnippet/extract.py
+        '';
+      };
+
+      # Full LaTeX environment with minted, modern packages, and codesnippet
+      texliveEnv = pkgs.texliveMedium.withPackages (ps: with ps; [
+        minted
+        fvextra
+        fancyvrb
+        lineno
+        framed
+        float
+        xcolor
+        kvoptions
+        pgf
+        catchfile
+        latexmk
+        booktabs
+        caption
+        microtype
+        hyperref
+        amsmath
+        geometry
+        titlesec
+        enumitem
+        cleveref
+        codesnippetPkg
+      ]);
+
+      # Helper script to sync local companion extension and install recommended IDE extensions
+      setupIdeExtensions = pkgs.writeShellScriptBin "setup-ide-extensions" ''
+        set -e
+        REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+        EXT_SRC="$REPO_ROOT/setup/codesnippet-companion"
+
+        # 1. Sync custom codesnippet companion extension to VS Code and Antigravity IDE
+        if [ -d "$EXT_SRC" ]; then
+          for ext_dir in "$HOME/.vscode/extensions" "$HOME/.antigravity-ide/extensions"; do
+            mkdir -p "$ext_dir/nmp.codesnippet-companion-1.0.0"
+            cp -rf "$EXT_SRC"/* "$ext_dir/nmp.codesnippet-companion-1.0.0/" 2>/dev/null || true
+          done
+        fi
+
+        # 2. Curated extensions strictly relevant to Numerical Methods in Physics
+        EXTENSIONS=(
+          "ms-vscode.cpptools"
+          "llvm-vs-code-extensions.vscode-clangd"
+          "ms-vscode.cmake-tools"
+          "ms-vscode.makefile-tools"
+          "ms-python.python"
+          "ms-python.debugpy"
+          "James-Yu.latex-workshop"
+          "tomoki1207.pdf"
+          "mkhl.direnv"
+          "jnoortheen.nix-ide"
+          "AaronKazah.copy-reference-jetbrains"
+          "sandipchitale.vscode-fqn"
+        )
+
+        for ide in code antigravity-ide; do
+          if command -v "$ide" >/dev/null 2>&1; then
+            INSTALLED="$("$ide" --list-extensions 2>/dev/null || true)"
+            for ext in "''${EXTENSIONS[@]}"; do
+              if ! echo "$INSTALLED" | grep -qi "^$ext\$"; then
+                echo "Installing $ext into $ide..."
+                "$ide" --install-extension "$ext" >/dev/null 2>&1 || true
+              fi
+            done
+          fi
+        done
+
+        # 3. Share marketplace extensions across VS Code & Antigravity IDE
+        for ext in "$HOME/.vscode/extensions"/*copy-reference* "$HOME/.vscode/extensions"/*vscode-fqn*; do
+          if [ -d "$ext" ]; then
+            base_name=$(basename "$ext")
+            if [ ! -d "$HOME/.antigravity-ide/extensions/$base_name" ]; then
+              cp -rf "$ext" "$HOME/.antigravity-ide/extensions/" 2>/dev/null || true
+            fi
+          fi
+        done
+      '';
 
       # standalone packaging script available directly on PATH in any shell
       packProject = pkgs.writeShellScriptBin "pack-project" ''
@@ -157,7 +256,13 @@
           pkgs.sshfs
           pkgs.curl
 
+          # latex stack & tools
+          texliveEnv
+          pkgs.ghostscript
+          pkgs.which
+
           packProject
+          setupIdeExtensions
         ];
 
         # provide compiler include/lib paths without polluting global LD_LIBRARY_PATH
@@ -179,8 +284,40 @@
           # Locate repo root accurately even if invoked from subdirectories
           REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-          # Configure VS Code C/C++ IntelliSense & settings for Nix at repo root
+          # TeX environment paths: make custom codesnippet package and scripts immediately discoverable
+          export TEXINPUTS=".:$REPO_ROOT/codesnippet//:$TEXINPUTS"
+          export PATH="$REPO_ROOT/codesnippet:$PATH"
+
+          # Sync custom codesnippet companion extension for VS Code & Antigravity IDE
+          if [ -d "$REPO_ROOT/setup/codesnippet-companion" ]; then
+            for ext_dir in "$HOME/.vscode/extensions" "$HOME/.antigravity-ide/extensions"; do
+              mkdir -p "$ext_dir/nmp.codesnippet-companion-1.0.0"
+              cp -rf "$REPO_ROOT/setup/codesnippet-companion"/* "$ext_dir/nmp.codesnippet-companion-1.0.0/" 2>/dev/null || true
+            done
+          fi
+
+          # Configure VS Code & Antigravity workspace recommendations & settings at repo root
           mkdir -p "$REPO_ROOT/.vscode"
+
+          cat > "$REPO_ROOT/.vscode/extensions.json" <<EOF
+{
+  "recommendations": [
+    "ms-vscode.cpptools",
+    "llvm-vs-code-extensions.vscode-clangd",
+    "ms-vscode.cmake-tools",
+    "ms-vscode.makefile-tools",
+    "ms-python.python",
+    "ms-python.debugpy",
+    "James-Yu.latex-workshop",
+    "tomoki1207.pdf",
+    "mkhl.direnv",
+    "jnoortheen.nix-ide",
+    "AaronKazah.copy-reference-jetbrains",
+    "sandipchitale.vscode-fqn"
+  ]
+}
+EOF
+
           cat > "$REPO_ROOT/.vscode/c_cpp_properties.json" <<EOF
 {
   "configurations": [
@@ -229,7 +366,52 @@ EOF
   "C_Cpp.default.defines": [
     "STUDENT_WITH_BLAS"
   ],
-  "C_Cpp.default.intelliSenseMode": "linux-gcc-x64"
+  "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
+  "latex-workshop.latex.tools": [
+    {
+      "name": "pdflatex",
+      "command": "pdflatex",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-shell-escape",
+        "%DOC%"
+      ]
+    },
+    {
+      "name": "latexmk",
+      "command": "latexmk",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-pdf",
+        "-shell-escape",
+        "-outdir=%OUTDIR%",
+        "%DOC%"
+      ]
+    }
+  ],
+  "latex-workshop.latex.recipes": [
+    {
+      "name": "pdflatex (shell-escape)",
+      "tools": [
+        "pdflatex"
+      ]
+    },
+    {
+      "name": "latexmk (shell-escape)",
+      "tools": [
+        "latexmk"
+      ]
+    }
+  ],
+  "latex-workshop.view.pdf.viewer": "tab",
+  "latex-workshop.formatting.latex": "latexindent",
+  "[latex]": {
+    "editor.defaultFormatter": "James-Yu.latex-workshop"
+  }
 }
 EOF
 
@@ -349,6 +531,7 @@ EOF
                 mkdir -p "$target_dir/.vscode"
                 cp -f "$REPO_ROOT/.vscode/c_cpp_properties.json" "$target_dir/.vscode/c_cpp_properties.json"
                 cp -f "$REPO_ROOT/.vscode/settings.json" "$target_dir/.vscode/settings.json"
+                cp -f "$REPO_ROOT/.vscode/extensions.json" "$target_dir/.vscode/extensions.json"
                 if [ ! -f "$target_dir/compile_flags.txt" ]; then
                   cp -f "$REPO_ROOT/.vscode/compile_flags.txt" "$target_dir/compile_flags.txt"
                 fi
@@ -367,6 +550,13 @@ EOF
               fi
             fi
           done
+
+          # Auto setup IDE extensions in background (one-time cached, fully detached)
+          if [ ! -f "$HOME/.cache/nmp-ide-setup-done" ] && command -v setup-ide-extensions >/dev/null 2>&1; then
+            mkdir -p "$HOME/.cache"
+            touch "$HOME/.cache/nmp-ide-setup-done"
+            ( nohup setup-ide-extensions </dev/null >/dev/null 2>&1 & )
+          fi
 
           # handles the case when spawned via nix develop
           if [ -z "$IN_NUSHELL" ] && [ -z "$DIRENV_IN_ENVRC" ] && [ -t 0 ] && command -v nu >/dev/null 2>&1; then

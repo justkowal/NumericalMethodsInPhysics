@@ -1,0 +1,76 @@
+{
+  "name": "codesnippet-companion",
+  "displayName": "CodeSnippet Companion",
+  "description": "Right-click any source code to copy semantic symbol paths or LaTeX \\codesnippet macros recognized by the codesnippet package.",
+  "version": "1.0.0",
+  "publisher": "nmp",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "codesnippet.copySemanticPath",
+        "title": "CodeSnippet: Copy Semantic Symbol Path",
+        "category": "CodeSnippet"
+      },
+      {
+        "command": "codesnippet.copyLatexMacro",
+        "title": "CodeSnippet: Copy \\codesnippet Macro",
+        "category": "CodeSnippet"
+      },
+      {
+        "command": "codesnippet.copyLatexMacroDetailed",
+        "title": "CodeSnippet: Copy \\codesnippet Macro with Title & Label",
+        "category": "CodeSnippet"
+      },
+      {
+        "command": "codesnippet.copyLocation",
+        "title": "CodeSnippet: Copy Real Location (file:lines)",
+        "category": "CodeSnippet"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "codesnippet.copySemanticPath",
+          "group": "7_codesnippet@1"
+        },
+        {
+          "command": "codesnippet.copyLatexMacro",
+          "group": "7_codesnippet@2"
+        },
+        {
+          "command": "codesnippet.copyLatexMacroDetailed",
+          "group": "7_codesnippet@3"
+        },
+        {
+          "command": "codesnippet.copyLocation",
+          "group": "7_codesnippet@4"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "codesnippet.copySemanticPath",
+        "key": "ctrl+alt+s",
+        "mac": "cmd+alt+s",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codesnippet.copyLatexMacro",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "editorTextFocus"
+      }
+    ]
+  }
+}

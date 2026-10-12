@@ -75,6 +75,50 @@ target_include_directories(${CORE} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOU
 target_link_libraries(${CORE} PUBLIC ${LIBS})
 target_compile_definitions(${CORE} PUBLIC ${DEFS})
 
+# compiler flag study targets for activity4
+set(FLAG_STUDY_LEVELS "O0" "O1" "O2" "O3" "Ofast")
+set(FLAG_STUDY_TARGETS "")
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/activity4.cpp")
+    foreach(F IN LISTS FLAG_STUDY_LEVELS)
+        set(FLAG_CORE "${PROJECT_NAME}_core_${F}")
+        if(LIB_SRCS)
+            add_library(${FLAG_CORE} STATIC ${LIB_SRCS})
+        else()
+            add_library(${FLAG_CORE} INTERFACE)
+        endif()
+        target_include_directories(${FLAG_CORE} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+        target_link_libraries(${FLAG_CORE} PUBLIC ${LIBS})
+        target_compile_definitions(${FLAG_CORE} PUBLIC ${DEFS})
+        target_compile_options(${FLAG_CORE} PRIVATE -${F} -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Wno-cpp)
+
+        set(FLAG_EXE "activity4_${F}")
+        add_executable(${FLAG_EXE} src/activity4.cpp)
+        target_link_libraries(${FLAG_EXE} PRIVATE ${FLAG_CORE})
+        target_compile_options(${FLAG_EXE} PRIVATE -${F} -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Wno-cpp)
+        list(APPEND FLAG_STUDY_TARGETS ${FLAG_EXE})
+    endforeach()
+
+    if(Python3_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/plot_activity4.py")
+        set(STUDY_RUN_CMDS "")
+        foreach(FLAG_EXE IN LISTS FLAG_STUDY_TARGETS)
+            list(APPEND STUDY_RUN_CMDS
+                COMMAND ${CMAKE_COMMAND} -E echo ""
+                COMMAND ${CMAKE_COMMAND} -E echo "Output of ${FLAG_EXE}:"
+                COMMAND ${FLAG_EXE}
+            )
+        endforeach()
+        add_custom_target(compiler_study
+            DEPENDS ${FLAG_STUDY_TARGETS}
+            ${STUDY_RUN_CMDS}
+            COMMAND ${CMAKE_COMMAND} -E echo ""
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/plot_activity4.py"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            COMMENT "Running C++ flag binaries and plotting compiler study"
+        )
+    endif()
+endif()
+
 # build targets and run_all
 list(SORT EXES)
 set(RUN_CMDS "")
@@ -90,6 +134,16 @@ foreach(EXEC_SRC IN LISTS EXES)
         COMMAND ${CMAKE_COMMAND} -E echo "Output of ${NAME}:"
         COMMAND ${NAME}
     )
+
+    if("${NAME}" STREQUAL "activity4" AND FLAG_STUDY_TARGETS)
+        foreach(FLAG_EXE IN LISTS FLAG_STUDY_TARGETS)
+            list(APPEND RUN_CMDS
+                COMMAND ${CMAKE_COMMAND} -E echo ""
+                COMMAND ${CMAKE_COMMAND} -E echo "Output of ${FLAG_EXE}:"
+                COMMAND ${FLAG_EXE}
+            )
+        endforeach()
+    endif()
 
     # matching plot script
     set(PLOT_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/scripts/plot_${NAME}.py")
@@ -109,6 +163,10 @@ endforeach()
 
 # run_all target
 if(EXES)
-    add_custom_target(run_all ${RUN_CMDS} WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_custom_target(run_all
+        ${RUN_CMDS}
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DEPENDS ${EXES} ${FLAG_STUDY_TARGETS}
+    )
     add_custom_target(run-all DEPENDS run_all)
 endif()

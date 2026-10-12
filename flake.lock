@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "codesnippet-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791626915,
+        "narHash": "sha256-RG5SFreSlLpGmLZ3o1+9z6f0viHhg7yS+IoKKcC1PRg=",
+        "owner": "justkowal",
+        "repo": "codesnippet",
+        "rev": "0bf900ff1f5fdd3cfa5472dd80efb8a0ad10477b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "justkowal",
+        "repo": "codesnippet",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -36,6 +52,7 @@
     },
     "root": {
       "inputs": {
+        "codesnippet-src": "codesnippet-src",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs"
       }
