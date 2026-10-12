@@ -4,6 +4,8 @@
 
 ### option 1: nix (recommended)
 
+this sets up all dependencies properly with a single command and isolates them from system packages:
+
 install nix (with flakes enabled):
 ```bash
 sh <(curl -L https://nixos.org/nix/install) --daemon
