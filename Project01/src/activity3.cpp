@@ -93,7 +93,7 @@ namespace
         return options;
     }
 
-    void check_finite(const Vector &x)
+    void check_finite(const Vector<double> &x)
     {
         for (std::size_t i = 0; i < x.size(); ++i)
         {
@@ -104,7 +104,7 @@ namespace
         }
     }
 
-    Matrix gamma_matrix(std::size_t n, double gamma)
+    Matrix<double> gamma_matrix(std::size_t n, double gamma)
     {
         if (n == 0)
         {

@@ -21,11 +21,14 @@ def read_norms(path: pathlib.Path):
     return k, y
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument('input', type=pathlib.Path, nargs='?', default=pathlib.Path('data'))
-    p.add_argument('--output', type=pathlib.Path, default=pathlib.Path('plots'))
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('input', type=pathlib.Path, nargs='?', default=pathlib.Path('data'),
+                   help='Directory containing norms_gamma2.csv and norms_gamma3.csv')
+    p.add_argument('--output', type=pathlib.Path, default=pathlib.Path('plots'),
+                   help='Directory where generated plots are saved (defaults to plots)')
     a = p.parse_args()
     a.output.mkdir(parents=True, exist_ok=True)
+
     for g in (2, 3):
         x, y = read_norms(a.input / f'norms_gamma{g}.csv')
         fig, ax = plt.subplots(figsize=(8, 4.8))
@@ -47,7 +50,7 @@ def main():
             fig.savefig(a.output / f'norms_gamma{g}.{ext}', dpi=180)
         plt.close(fig)
 
-    # 3. Third plot: gamma 2 vs gamma 3 comparison
+    # combined comparison plot
     k2, y2 = read_norms(a.input / 'norms_gamma2.csv')
     k3, y3 = read_norms(a.input / 'norms_gamma3.csv')
 
@@ -69,7 +72,7 @@ def main():
         fig.savefig(a.output / f'norms_comparison.{ext}', dpi=180)
     plt.close(fig)
 
-    print(f'Saved separate and comparison gamma plots to {a.output}')
+    print(f'Saved separate and comparison gamma plots from CSV data to {a.output}')
     return 0
 
 if __name__ == '__main__':

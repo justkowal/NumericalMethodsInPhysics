@@ -85,7 +85,7 @@ namespace
         return options;
     }
 
-    Matrix make_dense_matrix(std::size_t n, double gamma)
+    Matrix<double> make_dense_matrix(std::size_t n, double gamma)
     {
         return Matrix(n, n, [gamma](std::size_t i, std::size_t j) {
             const double distance = static_cast<double>(i) - static_cast<double>(j);
@@ -93,7 +93,7 @@ namespace
         });
     }
 
-    double frobenius_norm(const Matrix &m)
+    double frobenius_norm(const Matrix<double> &m)
     {
         double sum = 0.0;
         for (double value : m.data())
@@ -103,7 +103,7 @@ namespace
         return std::sqrt(sum);
     }
 
-    double frobenius_difference(const Matrix &lhs, const Matrix &rhs)
+    double frobenius_difference(const Matrix<double> &lhs, const Matrix<double> &rhs)
     {
         if (lhs.rows() != rhs.rows() || lhs.cols() != rhs.cols())
         {

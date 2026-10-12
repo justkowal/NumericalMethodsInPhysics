@@ -14,8 +14,8 @@ int main()
     std::cout << "dot([1,2,3],[4,5,6]) = " << u.dot(v) << '\n';
     std::cout << "norm([3,4]) = " << x.norm() << '\n';
     std::cout << "norm([0,0]) = " << z.norm() << '\n';
-    std::cout << "row_offset(2,1,5) = " << Vector::row_offset(2, 1, 5) << '\n';
-    std::cout << "col_offset(2,1,5) = " << Vector::column_offset(2, 1, 5) << '\n';
+    std::cout << "row_offset(2,1,5) = " << Vector<>::row_offset(2, 1, 5) << '\n';
+    std::cout << "col_offset(2,1,5) = " << Vector<>::column_offset(2, 1, 5) << '\n';
 
     return 0;
 }

@@ -1,0 +1,4 @@
+run_id,method,n,gamma,precision,repeats,median_seconds,min_seconds,max_seconds,reference_method,speedup,speedup_defined
+n256g2,manual_ijk,256,2,double,3,0.030273134,0.029694741,0.030353524999999999,manual_ijk,1.0,true
+n256g2,manual_ikj,256,2,double,3,0.028760803000000001,0.028417469000000001,0.035294648999999997,manual_ijk,1.0525830589639655,true
+n256g2,cblas_dgemm,256,2,double,3,0.0042837129999999998,0.0037797680000000002,0.0079487069999999993,manual_ijk,7.0670313347322757,true
